@@ -1,0 +1,69 @@
+# =====================================================
+# НАГРАДЫ ЗА УБИЙСТВО ИГРОКОВ (150, 250, 350, 500)
+# =====================================================
+on death of player:
+    if attacker is a player:
+        # Генерируем случайное число от 1 до 100 (для шанса)
+        set {_chance} to random integer between 1 and 100
+        set {_reward} to 0
+        
+        # Логика шансов:
+        # 1-5 (5% шанс) -> 500 монет (редкий дроп)
+        # 6-20 (15% шанс) -> 350 монет
+        # 21-50 (30% шанс) -> 250 монет
+        # 51-100 (50% шанс) -> 150 монет
+        
+        if {_chance} <= 5:
+            set {_reward} to 500
+        else if {_chance} <= 20:
+            set {_reward} to 350
+        else if {_chance} <= 50:
+            set {_reward} to 250
+        else:
+            set {_reward} to 150
+            
+        # Безопасно берем текущий баланс убийцы (через + 0)
+        set {_bal} to 0
+        if {money::%attacker's uuid%} is set:
+            set {_bal} to ({money::%attacker's uuid%} + 0)
+            
+        # Начисляем монеты
+        set {money::%attacker's uuid%} to ({_bal} + {_reward})
+        
+        # Отправляем сообщение в чат
+        send "&7Вы убили игрока &f%victim% &7и получили &f%{_reward}% монет!" to attacker
+
+# =====================================================
+# НАГРАДЫ ЗА УБИЙСТВО МОБОВ (5, 10, 20)
+# =====================================================
+on death of living entity:
+    # Проверяем, что убил игрок
+    if attacker is a player:
+        # Проверяем, что убитый - НЕ игрок (чтобы не начислить дважды)
+        if victim is not a player:
+            # Генерируем шанс от 1 до 100
+            set {_chance} to random integer between 1 and 100
+            set {_reward} to 0
+            
+            # Логика для мобов:
+            # 1-10 (10% шанс) -> 20 монет
+            # 11-40 (30% шанс) -> 10 монет
+            # 41-100 (60% шанс) -> 5 монет
+            
+            if {_chance} <= 10:
+                set {_reward} to 20
+            else if {_chance} <= 40:
+                set {_reward} to 10
+            else:
+                set {_reward} to 5
+                
+            # Безопасно берем баланс
+            set {_bal} to 0
+            if {money::%attacker's uuid%} is set:
+                set {_bal} to ({money::%attacker's uuid%} + 0)
+                
+            # Начисляем монеты
+            set {money::%attacker's uuid%} to ({_bal} + {_reward})
+            
+            # В чат мобу не пишем, чтобы не спамить, только в Action Bar (или можно вообще убрать)
+            send action bar "&7+%{_reward}% монет" to attacker

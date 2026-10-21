@@ -1,0 +1,75 @@
+# --- HUD (Обновление каждую секунду) ---
+every 1 second:
+    loop all players:
+        # Безопасно берем баланс монет (если пусто, то 0)
+        set {_money} to 0
+        if {money::%loop-player's uuid%} is set:
+            set {_money} to ({money::%loop-player's uuid%} + 0)
+            
+        # Если у игрока идет бой
+        if {combat::last_hit::%loop-player's uuid%} is set:
+            set {_time_passed} to difference between {combat::last_hit::%loop-player's uuid%} and now
+            if {_time_passed} >= 3 seconds:
+                delete {combat::last_hit::%loop-player's uuid%}
+                delete {combat::hits::%loop-player's uuid%}
+            else:
+                # Серо-белый дизайн для комбо + монеты
+                send action bar "&7&l▎ &f&lCOMBAT &8» &7&l%{combat::hits::%loop-player's uuid%}% &f&lHITS &8| &f&lCOINS &8» &7&l🪙 %{_money}% &7&l▎" to loop-player
+        
+        # Если боя нет - показываем Kills и монеты
+        if {combat::last_hit::%loop-player's uuid%} is not set:
+            if {kills::%loop-player's uuid%} is not set:
+                set {kills::%loop-player's uuid%} to 0
+            # Серо-белый дизайн для киллов + монеты
+            send action bar "&7&l▎ &f&lKILLS &8» &7&l🗡 %{kills::%loop-player's uuid%}% &8| &f&lCOINS &8» &7&l🪙 %{_money}% &7&l▎" to loop-player
+
+# --- ЛОГИКА УРОНА (С задержкой в 1 секунду) ---
+on damage:
+    if attacker is a player:
+        # Проверяем, прошла ли 1 секунда с последнего засчитанного удара
+        if {combat::last_counted_hit::%attacker's uuid%} is not set:
+            # Если это первый удар, сразу засчитываем
+            set {combat::last_counted_hit::%attacker's uuid%} to now
+            set {combat::last_hit::%attacker's uuid%} to now
+            if {combat::hits::%attacker's uuid%} is not set:
+                set {combat::hits::%attacker's uuid%} to 1
+            else:
+                add 1 to {combat::hits::%attacker's uuid%}
+        else:
+            # Если уже били, проверяем, прошла ли 1 секунда
+            set {_time_since_counted} to difference between {combat::last_counted_hit::%attacker's uuid%} and now
+            if {_time_since_counted} >= 1 second:
+                # Прошла 1 секунда - засчитываем новый удар
+                set {combat::last_counted_hit::%attacker's uuid%} to now
+                set {combat::last_hit::%attacker's uuid%} to now
+                if {combat::hits::%attacker's uuid%} is not set:
+                    set {combat::hits::%attacker's uuid%} to 1
+                else:
+                    add 1 to {combat::hits::%attacker's uuid%}
+            else:
+                # Если прошло меньше 1 секунды, просто обновляем время последнего удара (чтобы комбо не сбрасывалось)
+                set {combat::last_hit::%attacker's uuid%} to now
+
+# --- ЛОГИКА СМЕРТИ (Для киллов и монет) ---
+on death of player:
+    if attacker is a player:
+        # Добавляем килл
+        if {kills::%attacker's uuid%} is not set:
+            set {kills::%attacker's uuid%} to 1
+        else:
+            add 1 to {kills::%attacker's uuid%}
+            
+        # НАЧИСЛЯЕМ МОНЕТЫ ЗА УБИЙСТВО (например, 150 монет)
+        set {_reward} to 150
+        set {_bal} to 0
+        if {money::%attacker's uuid%} is set:
+            set {_bal} to ({money::%attacker's uuid%} + 0)
+        set {money::%attacker's uuid%} to ({_bal} + {_reward})
+        
+        # Отправляем сообщение в чат
+        send "&7Вы убили &f%victim%&7 и получили &f%{_reward}% монет!" to attacker
+            
+        # Сбрасываем комбо
+        delete {combat::last_hit::%attacker's uuid%}
+        delete {combat::hits::%attacker's uuid%}
+        delete {combat::last_counted_hit::%attacker's uuid%}

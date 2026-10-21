@@ -1,0 +1,307 @@
+# =====================================================
+# 1. БАЛАНС
+# =====================================================
+command /bal:
+    trigger:
+        set {_bal} to 0
+        if {money::%uuid of player%} is set:
+            set {_bal} to ({money::%uuid of player%} + 0)
+        send "&7Твой баланс: &f%{_bal}%" to player
+
+# =====================================================
+# 2. ВЫДАЧА МОНЕТ
+# =====================================================
+command /givecoin <player> <number>:
+    permission: skript.admin
+    trigger:
+        if argument 2 <= 0:
+            send "&7Количество должно быть больше нуля!" to player
+            stop
+            
+        set {_target} to uuid of argument 1
+        set {_bal} to 0
+        # Безопасно берем текущий баланс
+        if {money::%{_target}%} is set:
+            set {_bal} to ({money::%{_target}%} + 0)
+            
+        # Прибавляем монеты
+        set {_bal} to ({_bal} + argument 2)
+        set {money::%{_target}%} to {_bal}
+        
+        send "&7Вы выдали игроку &f%argument 1% &7монет: &f%argument 2%" to player
+        send "&7Вам выдали &f%argument 2% &7монет!" to argument 1
+
+# =====================================================
+# 3. МАГАЗИН (ИГРОКИ)
+# =====================================================
+command /shop:
+    trigger:
+        set {_inv} to chest inventory with 6 rows named "&8&lМАГАЗИН"
+        delete {shop::slots::%uuid of player%::*}
+        set {_slot} to 0
+        loop {shop::ids::*}:
+            set {_id} to loop-value
+            if {_slot} < 54:
+                if {shop::item::%{_id}%} is set:
+                    if {shop::price::%{_id}%} is set:
+                        set {_item} to {shop::item::%{_id}%}
+                        set {_display} to {_item}
+                        
+                        # Безопасно берем цену
+                        set {_price} to 0
+                        if {shop::price::%{_id}%} is set:
+                            set {_price} to ({shop::price::%{_id}%} + 0)
+                        
+                        set lore of {_display} to "&7Цена: &f%{_price}%||&7Нажмите, чтобы купить"
+                        set slot {_slot} of {_inv} to {_display}
+                        set {shop::slots::%uuid of player%::%{_slot}%} to {_id}
+                        add 1 to {_slot}
+        open {_inv} to player
+
+# =====================================================
+# 4. ПОКУПКА
+# =====================================================
+on inventory click:
+    if name of player's current inventory is "&8&lМАГАЗИН":
+        cancel event
+        if clicked inventory is player's inventory:
+            stop
+
+        set {_slot} to index of event-slot
+        set {_uuid} to uuid of player
+        set {_id} to {shop::slots::%{_uuid}%::%{_slot}%}
+
+        if {_id} is not set:
+            stop
+
+        # Безопасно берем цену
+        set {_price} to 0
+        if {shop::price::%{_id}%} is set:
+            set {_price} to ({shop::price::%{_id}%} + 0)
+            
+        set {_item} to {shop::item::%{_id}%}
+
+        # Безопасно берем баланс
+        set {_bal} to 0
+        if {money::%{_uuid}%} is set:
+            set {_bal} to ({money::%{_uuid}%} + 0)
+
+        # Сравниваем чистые числа
+        if {_bal} >= {_price}:
+            if player has enough space for {_item}:
+                # Вычитаем и сохраняем чистое число
+                set {money::%{_uuid}%} to ({_bal} - {_price})
+                give {_item} to player
+                send "&7Покупка успешна! Остаток: &f%{money::%{_uuid}%}%" to player
+            else:
+                send "&cНедостаточно места в инвентаре!" to player
+        else:
+            send "&cНедостаточно монет! Нужно: %{_price}%. У вас: %{_bal}%" to player
+
+# =====================================================
+# 5. АДМИНСКИЙ РЕДАКТОР
+# =====================================================
+command /shopadmin <text>:
+    permission: skript.admin
+    trigger:
+        if argument 1 is not "editor":
+            send "&cИспользование: /shopadmin editor" to player
+            stop
+        
+        set {_inv} to chest inventory with 6 rows named "&8&lУПРАВЛЕНИЕ МАГАЗИНОМ"
+        set {_slot} to 0
+        delete {shop::admin_slots::%uuid of player%::*}
+        loop {shop::ids::*}:
+            set {_id} to loop-value
+            if {_slot} < 54:
+                if {shop::item::%{_id}%} is set:
+                    set {_item} to {shop::item::%{_id}%}
+                    set {_display} to {_item}
+                    
+                    set {_price} to 0
+                    if {shop::price::%{_id}%} is set:
+                        set {_price} to ({shop::price::%{_id}%} + 0)
+                    
+                    set lore of {_display} to "&7Цена: &f%{_price}%||&cЛКМ: Удалить товар"
+                    set slot {_slot} of {_inv} to {_display}
+                    set {shop::admin_slots::%uuid of player%::%{_slot}%} to {_id}
+                    add 1 to {_slot}
+        
+        open {_inv} to player
+        send "&7ЛКМ по пустому слоту - добавить новый предмет." to player
+        send "&7ЛКМ по предмету - удалить его из магазина." to player
+
+# =====================================================
+# 6. ОБРАБОТКА КЛИКОВ В АДМИНКЕ
+# =====================================================
+on inventory click:
+    if name of player's current inventory is "&8&lУПРАВЛЕНИЕ МАГАЗИНОМ":
+        cancel event
+        if clicked inventory is player's inventory:
+            stop
+        set {_slot} to index of event-slot
+        set {_uuid} to uuid of player
+        set {_id} to {shop::admin_slots::%{_uuid}%::%{_slot}%}
+        
+        if {_id} is set:
+            delete {shop::item::%{_id}%}
+            delete {shop::price::%{_id}%}
+            remove {_id} from {shop::ids::*}
+            delete {shop::admin_slots::%{_uuid}%::%{_slot}%}
+            send "&7Предмет удален из магазина!" to player
+            execute player command "/shopadmin editor"
+        else:
+            close player's inventory
+            open chest inventory with 6 rows named "&8&lВЫБЕРИТЕ ПРЕДМЕТЫ" to player
+            send "&7Положи предметы в меню и закрой его." to player
+
+# =====================================================
+# 7. СОХРАНЕНИЕ ПРЕДМЕТОВ
+# =====================================================
+on inventory close:
+    if name of event-inventory is "&8&lВЫБЕРИТЕ ПРЕДМЕТЫ":
+        set {_uuid} to uuid of player
+        delete {shop::queue::%{_uuid}%::*}
+        
+        loop 54 times:
+            set {_slot} to loop-number - 1
+            set {_item} to slot {_slot} of event-inventory
+            if {_item} is not air:
+                add {_item} to {shop::queue::%{_uuid}%::*}
+                
+        if size of {shop::queue::%{_uuid}%::*} > 0:
+            set {shop::editor_index::%{_uuid}%} to 1
+            wait 1 tick
+            if player is online:
+                process_next_item(player)
+        else:
+            send "&cТы не положил ни одного предмета!" to player
+            wait 1 tick
+            if player is online:
+                execute player command "/shopadmin editor"
+
+# =====================================================
+# 8. НАСТРОЙКА ЦЕНЫ
+# =====================================================
+function process_next_item(p: player):
+    set {_uuid} to uuid of {_p}
+    set {_idx} to {shop::editor_index::%{_uuid}%}
+    if {_idx} is not set:
+        stop
+    if {_idx} > size of {shop::queue::%{_uuid}%::*}:
+        send "&7Все предметы добавлены в магазин!" to {_p}
+        delete {shop::queue::%{_uuid}%::*}
+        delete {shop::editor_index::%{_uuid}%}
+        delete {shop::editing_original::%{_uuid}%}
+        delete {shop::current_input::%{_uuid}%}
+        wait 1 tick
+        if {_p} is online:
+            execute {_p} command "/shopadmin editor"
+        stop
+        
+    set {_orig} to {shop::queue::%{_uuid}%::%{_idx}%}
+    set {shop::editing_original::%{_uuid}%} to {_orig}
+    
+    set {shop::current_input::%{_uuid}%} to 0
+    set {_inv} to chest inventory with 3 rows named "&8&lНАСТРОЙКА ЦЕНЫ"
+    
+    set {_display} to {_orig}
+    set lore of {_display} to "&7Цена: &f0||&7Нажимай на цифры ниже."
+    set slot 4 of {_inv} to {_display}
+    
+    set slot 10 of {_inv} to paper named "&f1"
+    set slot 11 of {_inv} to paper named "&f2"
+    set slot 12 of {_inv} to paper named "&f3"
+    set slot 13 of {_inv} to paper named "&f4"
+    set slot 14 of {_inv} to paper named "&f5"
+    set slot 15 of {_inv} to paper named "&f6"
+    set slot 16 of {_inv} to paper named "&f7"
+    set slot 19 of {_inv} to paper named "&f8"
+    set slot 20 of {_inv} to paper named "&f9"
+    set slot 21 of {_inv} to paper named "&f0"
+    
+    set slot 23 of {_inv} to red stained glass pane named "&cСтереть"
+    set slot 22 of {_inv} to arrow named "&aПодтвердить цену"
+    set slot 18 of {_inv} to barrier named "&cПропустить"
+    open {_inv} to {_p}
+
+# =====================================================
+# 9. ВВОД ЦИФР
+# =====================================================
+on inventory click:
+    if name of player's current inventory is "&8&lНАСТРОЙКА ЦЕНЫ":
+        cancel event
+        if clicked inventory is player's inventory:
+            stop
+        set {_uuid} to uuid of player
+        
+        set {_input} to 0
+        if {shop::current_input::%{_uuid}%} is set:
+            set {_input} to ({shop::current_input::%{_uuid}%} + 0)
+            
+        set {_slot} to index of event-slot
+
+        # Нажатие на цифру
+        if {_slot} is 10 or 11 or 12 or 13 or 14 or 15 or 16 or 19 or 20 or 21:
+            # Используем uncolored name, чтобы гарантированно получить "1", "2" и т.д.
+            set {_num} to uncolored name of event-item
+            set {_num_value} to {_num} parsed as integer
+            
+            if {_input} < 10000000:
+                set {_input} to ({_input} * 10) + {_num_value}
+                
+            set {shop::current_input::%{_uuid}%} to {_input}
+            
+            set {_orig} to {shop::editing_original::%{_uuid}%}
+            set {_display} to {_orig}
+            set lore of {_display} to "&7Цена: &f%{_input}%||&7Нажми Подтвердить."
+            set slot 4 of player's current inventory to {_display}
+            stop
+
+        # Стереть
+        if {_slot} is 23:
+            if {_input} > 0:
+                set {_input} to floor({_input} / 10)
+            set {shop::current_input::%{_uuid}%} to {_input}
+            
+            set {_orig} to {shop::editing_original::%{_uuid}%}
+            set {_display} to {_orig}
+            set lore of {_display} to "&7Цена: &f%{_input}%||&7Нажми Подтвердить."
+            set slot 4 of player's current inventory to {_display}
+            stop
+
+        # ПОДТВЕРДИТЬ
+        if {_slot} is 22:
+            if {_input} <= 0:
+                send "&cЦена должна быть больше нуля!" to player
+                stop
+            
+            set {_price} to {_input}
+            set {_orig} to {shop::editing_original::%{_uuid}%}
+            
+            if {shop::next_id} is not set:
+                set {shop::next_id} to 0
+            add 1 to {shop::next_id}
+            set {_id} to {shop::next_id}
+            
+            set {shop::item::%{_id}%} to {_orig}
+            set {shop::price::%{_id}%} to {_price}
+            add {_id} to {shop::ids::*}
+            
+            send "&7Предмет добавлен! Цена: &f%{_price}%" to player
+            add 1 to {shop::editor_index::%{_uuid}%}
+            close player's inventory
+            wait 1 tick
+            if player is online:
+                process_next_item(player)
+            stop
+
+        # Пропустить
+        if {_slot} is 18:
+            add 1 to {shop::editor_index::%{_uuid}%}
+            send "&7Предмет пропущен." to player
+            close player's inventory
+            wait 1 tick
+            if player is online:
+                process_next_item(player)
+            stop
